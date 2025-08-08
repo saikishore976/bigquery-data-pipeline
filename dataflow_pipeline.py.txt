@@ -1,0 +1,39 @@
+```python
+import apache_beam as beam
+from apache_beam.options.pipeline_options import PipelineOptions
+
+class CleanData(beam.DoFn):
+    def process(self, element):
+        # Assuming CSV columns: id,name,age
+        fields = element.split(',')
+        if len(fields) == 3:
+            yield {
+                'id': int(fields[0]),
+                'name': fields[1],
+                'age': int(fields[2])
+            }
+
+def run(argv=None):
+    options = PipelineOptions(
+        runner='DataflowRunner',
+        project='YOUR_PROJECT_ID',
+        region='YOUR_REGION',
+        temp_location='gs://YOUR_BUCKET/temp',
+        staging_location='gs://YOUR_BUCKET/staging',
+        job_name='data-pipeline-job'
+    )
+    
+    with beam.Pipeline(options=options) as p:
+        (p
+         | 'ReadFromGCS' >> beam.io.ReadFromText('gs://YOUR_BUCKET/sample_data.csv', skip_header_lines=1)
+         | 'CleanData' >> beam.ParDo(CleanData())
+         | 'WriteToBigQuery' >> beam.io.WriteToBigQuery(
+                'YOUR_PROJECT_ID:YOUR_DATASET.YOUR_TABLE',
+                schema='id:INTEGER,name:STRING,age:INTEGER',
+                write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED
+            )
+        )
+
+if __name__ == '__main__':
+    run()
